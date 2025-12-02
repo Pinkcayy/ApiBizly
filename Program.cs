@@ -19,28 +19,39 @@ builder.Services.Configure<MongoDbSettings>(
 
 builder.Services.AddSingleton(sp =>
 {
-    var settings = sp.GetRequiredService<IOptions<MongoDbSettings>>().Value;
-
-    // En producción, verificar variables de entorno primero
-    var connectionString = Environment.GetEnvironmentVariable("MongoDbSettings__ConnectionString") 
-                           ?? settings.ConnectionString;
-    
-    var databaseName = Environment.GetEnvironmentVariable("MongoDbSettings__DatabaseName") 
-                       ?? settings.DatabaseName;
-
-    if (string.IsNullOrEmpty(connectionString))
+    try
     {
-        throw new Exception("MongoDbSettings.ConnectionString no está configurado. Verifica tu appsettings o variables de entorno.");
-    }
+        var settings = sp.GetRequiredService<IOptions<MongoDbSettings>>().Value;
 
-    // Actualizar con valores de entorno si existen
-    settings.ConnectionString = connectionString;
-    if (!string.IsNullOrEmpty(databaseName))
+        // En producción, verificar variables de entorno primero
+        var connectionString = Environment.GetEnvironmentVariable("MongoDbSettings__ConnectionString") 
+                               ?? settings?.ConnectionString;
+        
+        var databaseName = Environment.GetEnvironmentVariable("MongoDbSettings__DatabaseName") 
+                           ?? settings?.DatabaseName;
+
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            var logger = sp.GetService<ILogger<Program>>();
+            logger?.LogError("MongoDbSettings.ConnectionString no está configurado. Verifica las variables de entorno en Render.");
+            throw new Exception("MongoDbSettings.ConnectionString no está configurado. Verifica tu appsettings o variables de entorno en Render.");
+        }
+
+        // Actualizar con valores de entorno si existen
+        settings.ConnectionString = connectionString;
+        if (!string.IsNullOrEmpty(databaseName))
+        {
+            settings.DatabaseName = databaseName;
+        }
+
+        return settings;
+    }
+    catch (Exception ex)
     {
-        settings.DatabaseName = databaseName;
+        var logger = sp.GetService<ILogger<Program>>();
+        logger?.LogCritical(ex, "Error crítico al configurar MongoDB. La aplicación no puede iniciar.");
+        throw;
     }
-
-    return settings;
 });
 
 // =====================
