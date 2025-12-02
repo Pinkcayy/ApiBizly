@@ -4,7 +4,7 @@ using HotChocolate;
 
 namespace ApiBizly.GraphQL;
 
-[ExtendObjectType(Name = "Query")]
+[ExtendObjectType("Query")]
 public class ClienteQueries
 {
     public Task<List<Cliente>> GetClientes(

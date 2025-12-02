@@ -4,7 +4,7 @@ using HotChocolate;
 
 namespace ApiBizly.GraphQL;
 
-[ExtendObjectType(Name = "Mutation")]
+[ExtendObjectType("Mutation")]
 public class ClienteMutations
 {
     public async Task<Cliente> CrearCliente(
