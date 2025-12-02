@@ -8,6 +8,9 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using ParameterLocation = Microsoft.OpenApi.Models.ParameterLocation;
+using SecuritySchemeType = Microsoft.OpenApi.Models.SecuritySchemeType;
+using ReferenceType = Microsoft.OpenApi.Models.ReferenceType;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -155,7 +158,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    options.SwaggerDoc("v1", new()
     {
         Title = "ApiBizly API",
         Version = "v1",
@@ -163,23 +166,23 @@ builder.Services.AddSwaggerGen(options =>
     });
 
     // Configurar JWT en Swagger
-    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    options.AddSecurityDefinition("Bearer", new()
     {
         Description = "JWT Authorization header usando el esquema Bearer. Ejemplo: \"Authorization: Bearer {token}\"",
         Name = "Authorization",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
         Scheme = "Bearer"
     });
 
-    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    options.AddSecurityRequirement(new()
     {
         {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            new()
             {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                Reference = new()
                 {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Type = ReferenceType.SecurityScheme,
                     Id = "Bearer"
                 }
             },

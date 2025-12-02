@@ -8,17 +8,17 @@ WORKDIR /src
 COPY ["ApiBizly.csproj", "./"]
 
 # Restaurar dependencias
-RUN dotnet restore "ApiBizly.csproj"
+RUN dotnet restore "ApiBizly.csproj" --verbosity normal
 
 # Copiar todo el código fuente
 COPY . .
 
 # Compilar el proyecto
 WORKDIR "/src"
-RUN dotnet build "ApiBizly.csproj" -c Release -o /app/build --no-restore
+RUN dotnet build "ApiBizly.csproj" -c Release -o /app/build
 
 # Publicar la aplicación
-RUN dotnet publish "ApiBizly.csproj" -c Release -o /app/publish /p:UseAppHost=false --no-restore --no-build
+RUN dotnet publish "ApiBizly.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # ============================================
 # STAGE 2: Runtime
