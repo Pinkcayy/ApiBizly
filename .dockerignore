@@ -6,7 +6,6 @@
 **/obj
 **/node_modules
 **/.dockerignore
-**/Dockerfile
 **/README.md
 **/.gitignore
 **/*.user
