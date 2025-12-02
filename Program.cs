@@ -216,12 +216,16 @@ app.UseExceptionHandler(errorApp =>
         var exception = exceptionHandlerPathFeature?.Error;
 
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-        logger.LogError(exception, "Error no manejado en la aplicación");
+        logger.LogError(exception, "Error no manejado en la aplicación. Path: {Path}, Method: {Method}", 
+            context.Request.Path, context.Request.Method);
 
         var response = new
         {
             error = "Error interno del servidor",
-            message = exception?.Message ?? "Ocurrió un error inesperado"
+            message = exception?.Message ?? "Ocurrió un error inesperado",
+            details = app.Environment.IsDevelopment() ? exception?.ToString() : null,
+            path = context.Request.Path.Value,
+            method = context.Request.Method
         };
 
         await context.Response.WriteAsJsonAsync(response);

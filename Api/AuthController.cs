@@ -142,8 +142,23 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<object>> RegistroEmprendedor([FromBody] RegistroEmprendedorRequest? request)
     {
+        _logger.LogInformation("=== INICIO REGISTRO EMPRENDEDOR ===");
+        
         try
         {
+            // 1. VALIDAR REQUEST
+            if (request == null)
+            {
+                _logger.LogWarning("Request es null");
+                return BadRequest(new { 
+                    error = "Request inválido", 
+                    message = "El cuerpo de la petición no puede estar vacío" 
+                });
+            }
+
+            _logger.LogInformation("Request recibido. Email: {Email}, NombreEmpresa: {NombreEmpresa}", 
+                request.Email ?? "null", request.NombreEmpresa ?? "null");
+
             // Validar ModelState (errores de binding)
             if (!ModelState.IsValid)
             {
@@ -159,16 +174,6 @@ public class AuthController : ControllerBase
                     error = "Datos inválidos",
                     message = "El formato de los datos enviados es incorrecto",
                     errors = errors
-                });
-            }
-
-            // 1. VALIDAR REQUEST
-            if (request == null)
-            {
-                _logger.LogWarning("Request es null");
-                return BadRequest(new { 
-                    error = "Request inválido", 
-                    message = "El cuerpo de la petición no puede estar vacío" 
                 });
             }
 
