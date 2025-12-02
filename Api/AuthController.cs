@@ -5,6 +5,7 @@ using ApiBizly.Models;
 using ApiBizly.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using MongoDB.Driver;
@@ -19,17 +20,20 @@ public class AuthController : ControllerBase
     private readonly EmpresaService _empresaService;
     private readonly SucursalService _sucursalService;
     private readonly JwtSettings _jwtSettings;
+    private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         UsuarioService usuarioService,
         EmpresaService empresaService,
         SucursalService sucursalService,
-        IOptions<JwtSettings> jwtOptions)
+        IOptions<JwtSettings> jwtOptions,
+        ILogger<AuthController> logger)
     {
         _usuarioService = usuarioService;
         _empresaService = empresaService;
         _sucursalService = sucursalService;
         _jwtSettings = jwtOptions.Value;
+        _logger = logger;
     }
 
     public class LoginRequest
@@ -131,45 +135,66 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<object>> RegistroEmprendedor([FromBody] RegistroEmprendedorRequest request)
     {
+        _logger.LogInformation("Iniciando registro de emprendedor para email: {Email}", request?.Email ?? "null");
+
         try
         {
+            // 1. VALIDAR REQUEST
+            if (request == null)
+            {
+                _logger.LogWarning("Request es null");
+                return BadRequest(new { 
+                    error = "Request inválido", 
+                    message = "El cuerpo de la petición no puede estar vacío" 
+                });
+            }
+
             // Validar campos requeridos
             var camposFaltantes = new List<string>();
             
-            if (string.IsNullOrEmpty(request.Email))
+            if (string.IsNullOrWhiteSpace(request.Email))
                 camposFaltantes.Add("email");
             
-            if (string.IsNullOrEmpty(request.Password))
+            if (string.IsNullOrWhiteSpace(request.Password))
                 camposFaltantes.Add("password");
             
-            if (string.IsNullOrEmpty(request.NombreEmpresa))
+            if (string.IsNullOrWhiteSpace(request.NombreEmpresa))
                 camposFaltantes.Add("nombreEmpresa");
             
-            if (string.IsNullOrEmpty(request.NombreUsuario))
+            if (string.IsNullOrWhiteSpace(request.NombreUsuario))
                 camposFaltantes.Add("nombreUsuario");
             
             if (camposFaltantes.Any())
             {
+                _logger.LogWarning("Campos requeridos faltantes: {Campos}", string.Join(", ", camposFaltantes));
                 return BadRequest(new { 
                     error = "Campos requeridos faltantes", 
-                    camposFaltantes = camposFaltantes,
-                    mensaje = $"Los siguientes campos son requeridos: {string.Join(", ", camposFaltantes)}"
+                    message = $"Los siguientes campos son requeridos: {string.Join(", ", camposFaltantes)}",
+                    camposFaltantes = camposFaltantes
                 });
             }
 
-            // Verificar si el email ya existe
+            // 2. VALIDAR EMAIL ÚNICO
+            _logger.LogInformation("Verificando si el email {Email} ya existe", request.Email);
             var usuarioExistente = await _usuarioService.GetByEmailAsync(request.Email);
-            if (usuarioExistente is not null)
-                return BadRequest("El email ya está registrado.");
+            if (usuarioExistente != null)
+            {
+                _logger.LogWarning("Intento de registro con email duplicado: {Email}", request.Email);
+                return Conflict(new { 
+                    error = "Email ya registrado", 
+                    message = $"El email '{request.Email}' ya está registrado en el sistema" 
+                });
+            }
 
-            // Crear la empresa
+            // 3. CREAR EMPRESA
+            _logger.LogInformation("Creando empresa: {NombreEmpresa}", request.NombreEmpresa);
             var empresa = new Empresa
             {
-                Nombre = request.NombreEmpresa,
-                Rubro = request.Rubro ?? string.Empty,
-                Descripcion = request.DescripcionEmpresa ?? string.Empty,
+                Nombre = request.NombreEmpresa.Trim(),
+                Rubro = string.IsNullOrWhiteSpace(request.Rubro) ? string.Empty : request.Rubro.Trim(),
+                Descripcion = string.IsNullOrWhiteSpace(request.DescripcionEmpresa) ? string.Empty : request.DescripcionEmpresa.Trim(),
                 MargenGanancia = request.MargenGanancia,
-                LogoUrl = request.LogoUrl ?? string.Empty,
+                LogoUrl = string.IsNullOrWhiteSpace(request.LogoUrl) ? string.Empty : request.LogoUrl.Trim(),
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -178,19 +203,30 @@ public class AuthController : ControllerBase
 
             // Verificar que la empresa se creó correctamente
             if (string.IsNullOrEmpty(empresa.Id))
-                return StatusCode(500, "Error al crear la empresa. No se generó el ID.");
-
-            // Crear sucursal principal (opcional)
-            string? sucursalId = null;
-            if (!string.IsNullOrEmpty(request.NombreSucursal))
             {
+                _logger.LogError("Error crítico: La empresa se creó pero no se generó el ID");
+                return StatusCode(500, new { 
+                    error = "Error al crear la empresa", 
+                    message = "No se pudo generar el ID de la empresa. Por favor, intente nuevamente." 
+                });
+            }
+
+            _logger.LogInformation("Empresa creada exitosamente con ID: {EmpresaId}", empresa.Id);
+
+            // 4. CREAR SUCURSAL (OPCIONAL)
+            string? sucursalId = null;
+            if (!string.IsNullOrWhiteSpace(request.NombreSucursal))
+            {
+                _logger.LogInformation("Creando sucursal: {NombreSucursal} para empresa {EmpresaId}", 
+                    request.NombreSucursal, empresa.Id);
+
                 var sucursal = new Sucursal
                 {
                     EmpresaId = empresa.Id,
-                    Nombre = request.NombreSucursal,
-                    Direccion = request.DireccionSucursal ?? string.Empty,
-                    Ciudad = request.CiudadSucursal ?? string.Empty,
-                    Departamento = request.DepartamentoSucursal ?? string.Empty,
+                    Nombre = request.NombreSucursal.Trim(),
+                    Direccion = string.IsNullOrWhiteSpace(request.DireccionSucursal) ? string.Empty : request.DireccionSucursal.Trim(),
+                    Ciudad = string.IsNullOrWhiteSpace(request.CiudadSucursal) ? string.Empty : request.CiudadSucursal.Trim(),
+                    Departamento = string.IsNullOrWhiteSpace(request.DepartamentoSucursal) ? string.Empty : request.DepartamentoSucursal.Trim(),
                     Latitud = 0,
                     Longitud = 0,
                     Telefono = string.Empty,
@@ -199,17 +235,29 @@ public class AuthController : ControllerBase
                 };
 
                 await _sucursalService.CreateAsync(sucursal);
-                sucursalId = sucursal.Id;
+                
+                if (string.IsNullOrEmpty(sucursal.Id))
+                {
+                    _logger.LogWarning("Sucursal creada pero sin ID, continuando sin sucursal");
+                }
+                else
+                {
+                    sucursalId = sucursal.Id;
+                    _logger.LogInformation("Sucursal creada exitosamente con ID: {SucursalId}", sucursalId);
+                }
             }
 
-            // Crear el usuario EMPRENDEDOR
+            // 5. CREAR USUARIO EMPRENDEDOR
+            _logger.LogInformation("Creando usuario EMPRENDEDOR: {NombreUsuario} ({Email})", 
+                request.NombreUsuario, request.Email);
+
             var usuario = new Usuario
             {
                 EmpresaId = empresa.Id,
                 SucursalId = sucursalId,
                 TrabajadorId = null,
-                Nombre = request.NombreUsuario,
-                Email = request.Email,
+                Nombre = request.NombreUsuario.Trim(),
+                Email = request.Email.Trim().ToLowerInvariant(),
                 Password = request.Password,
                 TipoUsuario = "EMPRENDEDOR",
                 Activo = true,
@@ -219,40 +267,71 @@ public class AuthController : ControllerBase
 
             await _usuarioService.CreateAsync(usuario);
 
+            if (string.IsNullOrEmpty(usuario.Id))
+            {
+                _logger.LogError("Error crítico: El usuario se creó pero no se generó el ID");
+                return StatusCode(500, new { 
+                    error = "Error al crear el usuario", 
+                    message = "No se pudo generar el ID del usuario. La empresa fue creada pero el usuario no." 
+                });
+            }
+
+            _logger.LogInformation("Usuario EMPRENDEDOR creado exitosamente con ID: {UsuarioId}", usuario.Id);
+
+            // 6. RESPUESTA EXITOSA
             return Ok(new
             {
+                message = "Registro exitoso",
                 empresa = new
                 {
-                    empresa.Id,
-                    empresa.Nombre,
-                    empresa.Rubro
+                    id = empresa.Id,
+                    nombre = empresa.Nombre,
+                    rubro = empresa.Rubro
                 },
-                sucursal = sucursalId != null ? new { Id = sucursalId } : null,
+                sucursal = sucursalId != null ? new { id = sucursalId } : null,
                 usuario = new
                 {
-                    usuario.Id,
-                    usuario.Nombre,
-                    usuario.Email,
-                    usuario.TipoUsuario,
-                    usuario.EmpresaId,
-                    usuario.SucursalId
+                    id = usuario.Id,
+                    nombre = usuario.Nombre,
+                    email = usuario.Email,
+                    tipoUsuario = usuario.TipoUsuario,
+                    empresaId = usuario.EmpresaId,
+                    sucursalId = usuario.SucursalId
                 }
+            });
+        }
+        catch (MongoWriteException mongoWriteEx)
+        {
+            _logger.LogError(mongoWriteEx, "Error de escritura en MongoDB");
+            
+            // Manejar errores de duplicados o índices únicos
+            if (mongoWriteEx.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+            {
+                return Conflict(new { 
+                    error = "Registro duplicado", 
+                    message = "Ya existe un registro con estos datos. Verifique el email o intente con otros datos." 
+                });
+            }
+            
+            return StatusCode(500, new { 
+                error = "Error de base de datos", 
+                message = "No se pudo guardar la información en la base de datos. Por favor, intente nuevamente." 
             });
         }
         catch (MongoException mongoEx)
         {
+            _logger.LogError(mongoEx, "Error de conexión a MongoDB");
             return StatusCode(500, new { 
-                error = "Error de conexión a MongoDB", 
-                mensaje = "No se pudo conectar a la base de datos. Verifica la configuración de MongoDB.",
-                detalle = mongoEx.Message
+                error = "Error de conexión a la base de datos", 
+                message = "No se pudo conectar a la base de datos. Verifique la configuración del servidor." 
             });
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error inesperado en registro-emprendedor");
             return StatusCode(500, new { 
                 error = "Error interno del servidor", 
-                mensaje = ex.Message,
-                detalle = ex.InnerException?.Message
+                message = "Ocurrió un error inesperado. Por favor, intente nuevamente más tarde." 
             });
         }
     }
