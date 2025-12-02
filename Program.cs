@@ -3,6 +3,7 @@ using ApiBizly.Models;
 using ApiBizly.Services;
 using ApiBizly.GraphQL;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
@@ -116,7 +117,12 @@ builder.Services.AddAuthorization(options =>
 // =====================
 //  API REST (Controllers)
 // =====================
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        // Deshabilitar validación automática para manejar errores manualmente
+        options.SuppressModelStateInvalidFilter = false;
+    });
 
 // =====================
 //  CORS (para que el front pueda consumir la API)
@@ -218,6 +224,32 @@ app.UseCors();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// =====================
+//  MIDDLEWARE DE MANEJO DE ERRORES GLOBAL
+// =====================
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+
+        var exceptionHandlerPathFeature = context.Features.Get<IExceptionHandlerPathFeature>();
+        var exception = exceptionHandlerPathFeature?.Error;
+
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(exception, "Error no manejado en la aplicación");
+
+        var response = new
+        {
+            error = "Error interno del servidor",
+            message = exception?.Message ?? "Ocurrió un error inesperado"
+        };
+
+        await context.Response.WriteAsJsonAsync(response);
+    });
+});
 
 // =====================
 //  MAP CONTROLLERS + GRAPHQL

@@ -29,11 +29,11 @@ public class AuthController : ControllerBase
         IOptions<JwtSettings> jwtOptions,
         ILogger<AuthController> logger)
     {
-        _usuarioService = usuarioService;
-        _empresaService = empresaService;
-        _sucursalService = sucursalService;
-        _jwtSettings = jwtOptions.Value;
-        _logger = logger;
+        _usuarioService = usuarioService ?? throw new ArgumentNullException(nameof(usuarioService));
+        _empresaService = empresaService ?? throw new ArgumentNullException(nameof(empresaService));
+        _sucursalService = sucursalService ?? throw new ArgumentNullException(nameof(sucursalService));
+        _jwtSettings = jwtOptions?.Value ?? throw new ArgumentNullException(nameof(jwtOptions));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public class LoginRequest
@@ -65,6 +65,13 @@ public class AuthController : ControllerBase
         public string Password { get; set; } = null!;
         public string? SucursalId { get; set; }
         public string? TrabajadorId { get; set; }
+    }
+
+    [HttpGet("test")]
+    [AllowAnonymous]
+    public ActionResult<object> Test()
+    {
+        return Ok(new { message = "API funcionando correctamente", timestamp = DateTime.UtcNow });
     }
 
     [HttpPost("login")]
@@ -133,12 +140,28 @@ public class AuthController : ControllerBase
 
     [HttpPost("registro-emprendedor")]
     [AllowAnonymous]
-    public async Task<ActionResult<object>> RegistroEmprendedor([FromBody] RegistroEmprendedorRequest request)
+    public async Task<ActionResult<object>> RegistroEmprendedor([FromBody] RegistroEmprendedorRequest? request)
     {
-        _logger.LogInformation("Iniciando registro de emprendedor para email: {Email}", request?.Email ?? "null");
-
         try
         {
+            // Validar ModelState (errores de binding)
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState
+                    .Where(x => x.Value?.Errors.Count > 0)
+                    .SelectMany(x => x.Value!.Errors.Select(e => new { campo = x.Key, error = e.ErrorMessage }))
+                    .ToList();
+
+                _logger.LogWarning("ModelState inválido: {Errors}", string.Join(", ", errors.Select(e => $"{e.campo}: {e.error}")));
+                
+                return BadRequest(new
+                {
+                    error = "Datos inválidos",
+                    message = "El formato de los datos enviados es incorrecto",
+                    errors = errors
+                });
+            }
+
             // 1. VALIDAR REQUEST
             if (request == null)
             {
@@ -148,6 +171,8 @@ public class AuthController : ControllerBase
                     message = "El cuerpo de la petición no puede estar vacío" 
                 });
             }
+
+            _logger.LogInformation("Iniciando registro de emprendedor para email: {Email}", request.Email ?? "null");
 
             // Validar campos requeridos
             var camposFaltantes = new List<string>();
@@ -393,3 +418,4 @@ public class AuthController : ControllerBase
         });
     }
 }
+
