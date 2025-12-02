@@ -1,11 +1,13 @@
 using ApiBizly.Models;
 using ApiBizly.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ApiBizly.Api;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "EMPRENDEDOR,TRABAJADOR")]
 public class DetalleVentasController : ControllerBase
 {
     private readonly DetalleVentaService _service;

@@ -31,14 +31,21 @@ public class UsuarioService
         _collection.DeleteOneAsync(x => x.Id == id);
 
 
-    public async Task<Usuario?> GetByEmailAndPasswordAsync(string email, string contrasena)
+    public async Task<Usuario?> GetByEmailAndPasswordAsync(string email, string password)
     {
         return await _collection
             .Find(u =>
                 u.Email == email &&
-                u.Contrasena == contrasena &&
-                u.Estado == true
+                u.Password == password &&
+                u.Activo == true
             )
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<Usuario?> GetByEmailAsync(string email)
+    {
+        return await _collection
+            .Find(u => u.Email == email)
             .FirstOrDefaultAsync();
     }
 }

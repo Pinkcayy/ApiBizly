@@ -1,11 +1,13 @@
 ﻿using ApiBizly.Models;
 using ApiBizly.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ApiBizly.Api;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "EMPRENDEDOR")]
 public class UsuariosController : ControllerBase
 {
     private readonly UsuarioService _service;

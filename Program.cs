@@ -1,8 +1,11 @@
+using System.Text;
 using ApiBizly.Models;
 using ApiBizly.Services;
 using ApiBizly.GraphQL;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,6 +43,40 @@ builder.Services.AddSingleton<TrabajadorService>();
 builder.Services.AddSingleton<ProductoVentaService>();
 builder.Services.AddSingleton<DetalleVentaService>();
 builder.Services.AddSingleton<InsumoProductoVentaService>();
+
+// =====================
+//  CONFIGURACIÓN JWT
+// =====================
+var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>();
+if (jwtSettings is null)
+    throw new Exception("JwtSettings no está configurado en appsettings.json");
+
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtSettings.Issuer,
+        ValidAudience = jwtSettings.Audience,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Key))
+    };
+});
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("EmprendedorOnly", policy => policy.RequireRole("EMPRENDEDOR"));
+    options.AddPolicy("TrabajadorOnly", policy => policy.RequireRole("TRABAJADOR"));
+});
 
 // =====================
 //  API REST (Controllers)
@@ -106,6 +143,7 @@ app.UseRouting();
 
 app.UseCors();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 // =====================
