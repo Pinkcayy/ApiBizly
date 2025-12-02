@@ -1,29 +1,40 @@
-# Usar la imagen base de .NET 9.0 SDK para compilar
+# ============================================
+# STAGE 1: Build
+# ============================================
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copiar el archivo del proyecto y restaurar dependencias
+# Copiar archivo de proyecto primero (para cache de dependencias)
 COPY ["ApiBizly.csproj", "./"]
+
+# Restaurar dependencias
 RUN dotnet restore "ApiBizly.csproj"
 
-# Copiar el resto de los archivos y compilar
+# Copiar todo el código fuente
 COPY . .
+
+# Compilar el proyecto
 WORKDIR "/src"
-RUN dotnet build "ApiBizly.csproj" -c Release -o /app/build --verbosity detailed
+RUN dotnet build "ApiBizly.csproj" -c Release -o /app/build --no-restore
 
 # Publicar la aplicación
-FROM build AS publish
-RUN dotnet publish "ApiBizly.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "ApiBizly.csproj" -c Release -o /app/publish /p:UseAppHost=false --no-restore --no-build
 
-# Imagen final de runtime
+# ============================================
+# STAGE 2: Runtime
+# ============================================
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
+
+# Copiar archivos publicados
+COPY --from=build /app/publish .
+
+# Variables de entorno para Render
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV ASPNETCORE_URLS=http://0.0.0.0:8080
+
+# Exponer puerto (Render lo maneja automáticamente via PORT)
 EXPOSE 8080
-ENV ASPNETCORE_URLS=http://+:8080
 
-# Copiar los archivos publicados
-COPY --from=publish /app/publish .
-
-# Establecer el punto de entrada
+# Punto de entrada
 ENTRYPOINT ["dotnet", "ApiBizly.dll"]
-

@@ -288,9 +288,18 @@ catch (System.Reflection.ReflectionTypeLoadException ex)
 }
 
 // =====================
-//  PUERTO PARA RENDER/RAILWAY
+//  PUERTO PARA RENDER
 // =====================
-// Render asigna el puerto automáticamente via variable PORT
-// No necesitamos configurarlo manualmente, Kestrel lo detecta automáticamente
+// Render asigna el puerto via variable de entorno PORT
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(port))
+{
+    app.Urls.Add($"http://0.0.0.0:{port}");
+}
+else
+{
+    // Fallback para desarrollo local
+    app.Urls.Add("http://0.0.0.0:8080");
+}
 
 app.Run();
