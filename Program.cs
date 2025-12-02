@@ -7,10 +7,6 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
-using ParameterLocation = Microsoft.OpenApi.Models.ParameterLocation;
-using SecuritySchemeType = Microsoft.OpenApi.Models.SecuritySchemeType;
-using ReferenceType = Microsoft.OpenApi.Models.ReferenceType;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -153,43 +149,10 @@ builder.Services.AddCors(options =>
 });
 
 // =====================
-//  Swagger
+//  Swagger (configuración básica sin personalización)
 // =====================
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new()
-    {
-        Title = "ApiBizly API",
-        Version = "v1",
-        Description = "API REST para gestión empresarial con autenticación JWT"
-    });
-
-    // Configurar JWT en Swagger
-    options.AddSecurityDefinition("Bearer", new()
-    {
-        Description = "JWT Authorization header usando el esquema Bearer. Ejemplo: \"Authorization: Bearer {token}\"",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
-    });
-
-    options.AddSecurityRequirement(new()
-    {
-        {
-            new()
-            {
-                Reference = new()
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
-    });
-});
+builder.Services.AddSwaggerGen();
 
 // =====================
 //  GRAPHQL
