@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using MongoDB.Driver;
 
 namespace ApiBizly.Api;
 
@@ -133,11 +134,28 @@ public class AuthController : ControllerBase
         try
         {
             // Validar campos requeridos
-            if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
-                return BadRequest("Email y password son requeridos.");
-
-            if (string.IsNullOrEmpty(request.NombreEmpresa) || string.IsNullOrEmpty(request.NombreUsuario))
-                return BadRequest("Nombre de empresa y nombre de usuario son requeridos.");
+            var camposFaltantes = new List<string>();
+            
+            if (string.IsNullOrEmpty(request.Email))
+                camposFaltantes.Add("email");
+            
+            if (string.IsNullOrEmpty(request.Password))
+                camposFaltantes.Add("password");
+            
+            if (string.IsNullOrEmpty(request.NombreEmpresa))
+                camposFaltantes.Add("nombreEmpresa");
+            
+            if (string.IsNullOrEmpty(request.NombreUsuario))
+                camposFaltantes.Add("nombreUsuario");
+            
+            if (camposFaltantes.Any())
+            {
+                return BadRequest(new { 
+                    error = "Campos requeridos faltantes", 
+                    camposFaltantes = camposFaltantes,
+                    mensaje = $"Los siguientes campos son requeridos: {string.Join(", ", camposFaltantes)}"
+                });
+            }
 
             // Verificar si el email ya existe
             var usuarioExistente = await _usuarioService.GetByEmailAsync(request.Email);
@@ -221,12 +239,20 @@ public class AuthController : ControllerBase
                 }
             });
         }
+        catch (MongoException mongoEx)
+        {
+            return StatusCode(500, new { 
+                error = "Error de conexión a MongoDB", 
+                mensaje = "No se pudo conectar a la base de datos. Verifica la configuración de MongoDB.",
+                detalle = mongoEx.Message
+            });
+        }
         catch (Exception ex)
         {
             return StatusCode(500, new { 
                 error = "Error interno del servidor", 
                 mensaje = ex.Message,
-                detalle = ex.InnerException?.Message 
+                detalle = ex.InnerException?.Message
             });
         }
     }

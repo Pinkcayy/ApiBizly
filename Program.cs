@@ -205,7 +205,12 @@ app.UseSwaggerUI();
 // =====================
 //  Middleware
 // =====================
-app.UseHttpsRedirection();
+// Render maneja HTTPS automáticamente, no necesitamos redirección
+// Solo usar HTTPS redirection en desarrollo local
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseRouting();
 
@@ -240,12 +245,9 @@ catch (System.Reflection.ReflectionTypeLoadException ex)
 }
 
 // =====================
-//  PUERTO PARA RAILWAY
+//  PUERTO PARA RENDER/RAILWAY
 // =====================
-var port = Environment.GetEnvironmentVariable("PORT");
-if (!string.IsNullOrEmpty(port))
-{
-    app.Urls.Add($"http://0.0.0.0:{port}");
-}
+// Render asigna el puerto automáticamente via variable PORT
+// No necesitamos configurarlo manualmente, Kestrel lo detecta automáticamente
 
 app.Run();
