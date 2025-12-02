@@ -9,7 +9,7 @@ RUN dotnet restore "ApiBizly.csproj"
 # Copiar el resto de los archivos y compilar
 COPY . .
 WORKDIR "/src"
-RUN dotnet build "ApiBizly.csproj" -c Release -o /app/build
+RUN dotnet build "ApiBizly.csproj" -c Release -o /app/build --verbosity detailed
 
 # Publicar la aplicación
 FROM build AS publish
