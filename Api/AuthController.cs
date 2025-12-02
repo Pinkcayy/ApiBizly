@@ -194,6 +194,15 @@ public class AuthController : ControllerBase
             if (string.IsNullOrWhiteSpace(request.NombreUsuario))
                 camposFaltantes.Add("nombreUsuario");
             
+            if (string.IsNullOrWhiteSpace(request.Rubro))
+                camposFaltantes.Add("rubro");
+            
+            if (string.IsNullOrWhiteSpace(request.DescripcionEmpresa))
+                camposFaltantes.Add("descripcionEmpresa");
+            
+            if (request.MargenGanancia <= 0)
+                camposFaltantes.Add("margenGanancia (debe ser mayor a 0)");
+            
             if (camposFaltantes.Any())
             {
                 _logger.LogWarning("Campos requeridos faltantes: {Campos}", string.Join(", ", camposFaltantes));
@@ -358,10 +367,14 @@ public class AuthController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error inesperado en registro-emprendedor");
+            _logger.LogError(ex, "Error inesperado en registro-emprendedor. Exception: {ExceptionType}, Message: {Message}, StackTrace: {StackTrace}", 
+                ex.GetType().Name, ex.Message, ex.StackTrace);
+            
             return StatusCode(500, new { 
                 error = "Error interno del servidor", 
-                message = "Ocurrió un error inesperado. Por favor, intente nuevamente más tarde." 
+                message = ex.Message ?? "Ocurrió un error inesperado. Por favor, intente nuevamente más tarde.",
+                exceptionType = ex.GetType().Name,
+                innerException = ex.InnerException?.Message
             });
         }
     }
