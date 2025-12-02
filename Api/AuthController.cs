@@ -44,7 +44,7 @@ public class AuthController : ControllerBase
         public string Rubro { get; set; } = null!;
         public string DescripcionEmpresa { get; set; } = null!;
         public decimal MargenGanancia { get; set; }
-        public string LogoUrl { get; set; } = string.Empty;
+        public string? LogoUrl { get; set; }
         public string NombreUsuario { get; set; } = null!;
         public string Email { get; set; } = null!;
         public string Password { get; set; } = null!;
