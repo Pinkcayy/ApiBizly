@@ -20,9 +20,23 @@ builder.Services.AddSingleton(sp =>
 {
     var settings = sp.GetRequiredService<IOptions<MongoDbSettings>>().Value;
 
-    if (string.IsNullOrEmpty(settings.ConnectionString))
+    // En producción, verificar variables de entorno primero
+    var connectionString = Environment.GetEnvironmentVariable("MongoDbSettings__ConnectionString") 
+                           ?? settings.ConnectionString;
+    
+    var databaseName = Environment.GetEnvironmentVariable("MongoDbSettings__DatabaseName") 
+                       ?? settings.DatabaseName;
+
+    if (string.IsNullOrEmpty(connectionString))
     {
         throw new Exception("MongoDbSettings.ConnectionString no está configurado. Verifica tu appsettings o variables de entorno.");
+    }
+
+    // Actualizar con valores de entorno si existen
+    settings.ConnectionString = connectionString;
+    if (!string.IsNullOrEmpty(databaseName))
+    {
+        settings.DatabaseName = databaseName;
     }
 
     return settings;
@@ -48,11 +62,31 @@ builder.Services.AddSingleton<InsumoProductoVentaService>();
 // =====================
 //  CONFIGURACIÓN JWT
 // =====================
-var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>();
-if (jwtSettings is null)
-    throw new Exception("JwtSettings no está configurado en appsettings.json");
+var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings();
 
-builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
+// Priorizar variables de entorno sobre appsettings.json
+jwtSettings.Key = Environment.GetEnvironmentVariable("JwtSettings__Key") ?? jwtSettings.Key ?? string.Empty;
+jwtSettings.Issuer = Environment.GetEnvironmentVariable("JwtSettings__Issuer") ?? jwtSettings.Issuer ?? "ApiBizly";
+jwtSettings.Audience = Environment.GetEnvironmentVariable("JwtSettings__Audience") ?? jwtSettings.Audience ?? "ApiBizlyClients";
+if (int.TryParse(Environment.GetEnvironmentVariable("JwtSettings__ExpirationMinutes"), out int expiration))
+{
+    jwtSettings.ExpirationMinutes = expiration;
+}
+else if (jwtSettings.ExpirationMinutes == 0)
+{
+    jwtSettings.ExpirationMinutes = 60;
+}
+
+if (string.IsNullOrEmpty(jwtSettings.Key))
+    throw new Exception("JwtSettings.Key no está configurado. Verifica tu appsettings o variables de entorno.");
+
+builder.Services.Configure<JwtSettings>(options =>
+{
+    options.Key = jwtSettings.Key;
+    options.Issuer = jwtSettings.Issuer;
+    options.Audience = jwtSettings.Audience;
+    options.ExpirationMinutes = jwtSettings.ExpirationMinutes;
+});
 
 builder.Services.AddAuthentication(options =>
 {

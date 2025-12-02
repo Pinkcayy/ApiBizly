@@ -66,134 +66,169 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<object>> Login([FromBody] LoginRequest request)
     {
-        var usuario = await _usuarioService.GetByEmailAndPasswordAsync(
-            request.Email, request.Password);
-
-        if (usuario is null)
-            return Unauthorized("Credenciales inválidas.");
-
-        var claims = new List<Claim>
+        try
         {
-            new Claim(JwtRegisteredClaimNames.Sub, usuario.Id!),
-            new Claim(JwtRegisteredClaimNames.Email, usuario.Email),
-            new Claim(ClaimTypes.Role, usuario.TipoUsuario),
-            new Claim("tipoUsuario", usuario.TipoUsuario),
-            new Claim("empresaId", usuario.EmpresaId)
-        };
+            if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
+                return BadRequest("Email y password son requeridos.");
 
-        if (!string.IsNullOrEmpty(usuario.SucursalId))
-        {
-            claims.Add(new Claim("sucursalId", usuario.SucursalId));
-        }
+            var usuario = await _usuarioService.GetByEmailAndPasswordAsync(
+                request.Email, request.Password);
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Key));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            if (usuario is null)
+                return Unauthorized("Credenciales inválidas.");
 
-        var token = new JwtSecurityToken(
-            issuer: _jwtSettings.Issuer,
-            audience: _jwtSettings.Audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationMinutes),
-            signingCredentials: creds
-        );
+            if (string.IsNullOrEmpty(_jwtSettings.Key))
+                return StatusCode(500, "Error de configuración del servidor: JWT Key no configurada.");
 
-        return Ok(new
-        {
-            token = new JwtSecurityTokenHandler().WriteToken(token),
-            usuario = new
+            var claims = new List<Claim>
             {
-                usuario.Id,
-                usuario.Nombre,
-                usuario.Email,
-                usuario.TipoUsuario,
-                usuario.EmpresaId,
-                usuario.SucursalId,
-                usuario.TrabajadorId
+                new Claim(JwtRegisteredClaimNames.Sub, usuario.Id!),
+                new Claim(JwtRegisteredClaimNames.Email, usuario.Email),
+                new Claim(ClaimTypes.Role, usuario.TipoUsuario),
+                new Claim("tipoUsuario", usuario.TipoUsuario),
+                new Claim("empresaId", usuario.EmpresaId)
+            };
+
+            if (!string.IsNullOrEmpty(usuario.SucursalId))
+            {
+                claims.Add(new Claim("sucursalId", usuario.SucursalId));
             }
-        });
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Key));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var token = new JwtSecurityToken(
+                issuer: _jwtSettings.Issuer,
+                audience: _jwtSettings.Audience,
+                claims: claims,
+                expires: DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationMinutes),
+                signingCredentials: creds
+            );
+
+            return Ok(new
+            {
+                token = new JwtSecurityTokenHandler().WriteToken(token),
+                usuario = new
+                {
+                    usuario.Id,
+                    usuario.Nombre,
+                    usuario.Email,
+                    usuario.TipoUsuario,
+                    usuario.EmpresaId,
+                    usuario.SucursalId,
+                    usuario.TrabajadorId
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Error interno del servidor", mensaje = ex.Message });
+        }
     }
 
     [HttpPost("registro-emprendedor")]
     [AllowAnonymous]
     public async Task<ActionResult<object>> RegistroEmprendedor([FromBody] RegistroEmprendedorRequest request)
     {
-        // Verificar si el email ya existe
-        var usuarioExistente = await _usuarioService.GetByEmailAsync(request.Email);
-        if (usuarioExistente is not null)
-            return BadRequest("El email ya está registrado.");
-
-        // Crear la empresa
-        var empresa = new Empresa
+        try
         {
-            Nombre = request.NombreEmpresa,
-            Rubro = request.Rubro,
-            Descripcion = request.DescripcionEmpresa,
-            MargenGanancia = request.MargenGanancia,
-            LogoUrl = request.LogoUrl,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+            // Validar campos requeridos
+            if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
+                return BadRequest("Email y password son requeridos.");
 
-        await _empresaService.CreateAsync(empresa);
+            if (string.IsNullOrEmpty(request.NombreEmpresa) || string.IsNullOrEmpty(request.NombreUsuario))
+                return BadRequest("Nombre de empresa y nombre de usuario son requeridos.");
 
-        // Crear sucursal principal (opcional)
-        string? sucursalId = null;
-        if (!string.IsNullOrEmpty(request.NombreSucursal))
-        {
-            var sucursal = new Sucursal
+            // Verificar si el email ya existe
+            var usuarioExistente = await _usuarioService.GetByEmailAsync(request.Email);
+            if (usuarioExistente is not null)
+                return BadRequest("El email ya está registrado.");
+
+            // Crear la empresa
+            var empresa = new Empresa
             {
-                EmpresaId = empresa.Id!,
-                Nombre = request.NombreSucursal,
-                Direccion = request.DireccionSucursal ?? string.Empty,
-                Ciudad = request.CiudadSucursal ?? string.Empty,
-                Departamento = request.DepartamentoSucursal ?? string.Empty,
-                Latitud = 0,
-                Longitud = 0,
-                Telefono = string.Empty,
+                Nombre = request.NombreEmpresa,
+                Rubro = request.Rubro ?? string.Empty,
+                Descripcion = request.DescripcionEmpresa ?? string.Empty,
+                MargenGanancia = request.MargenGanancia,
+                LogoUrl = request.LogoUrl ?? string.Empty,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
 
-            await _sucursalService.CreateAsync(sucursal);
-            sucursalId = sucursal.Id;
-        }
+            await _empresaService.CreateAsync(empresa);
 
-        // Crear el usuario EMPRENDEDOR
-        var usuario = new Usuario
-        {
-            EmpresaId = empresa.Id!,
-            SucursalId = sucursalId,
-            TrabajadorId = null,
-            Nombre = request.NombreUsuario,
-            Email = request.Email,
-            Password = request.Password,
-            TipoUsuario = "EMPRENDEDOR",
-            Activo = true,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+            // Verificar que la empresa se creó correctamente
+            if (string.IsNullOrEmpty(empresa.Id))
+                return StatusCode(500, "Error al crear la empresa. No se generó el ID.");
 
-        await _usuarioService.CreateAsync(usuario);
-
-        return Ok(new
-        {
-            empresa = new
+            // Crear sucursal principal (opcional)
+            string? sucursalId = null;
+            if (!string.IsNullOrEmpty(request.NombreSucursal))
             {
-                empresa.Id,
-                empresa.Nombre,
-                empresa.Rubro
-            },
-            sucursal = sucursalId != null ? new { Id = sucursalId } : null,
-            usuario = new
-            {
-                usuario.Id,
-                usuario.Nombre,
-                usuario.Email,
-                usuario.TipoUsuario,
-                usuario.EmpresaId,
-                usuario.SucursalId
+                var sucursal = new Sucursal
+                {
+                    EmpresaId = empresa.Id,
+                    Nombre = request.NombreSucursal,
+                    Direccion = request.DireccionSucursal ?? string.Empty,
+                    Ciudad = request.CiudadSucursal ?? string.Empty,
+                    Departamento = request.DepartamentoSucursal ?? string.Empty,
+                    Latitud = 0,
+                    Longitud = 0,
+                    Telefono = string.Empty,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                await _sucursalService.CreateAsync(sucursal);
+                sucursalId = sucursal.Id;
             }
-        });
+
+            // Crear el usuario EMPRENDEDOR
+            var usuario = new Usuario
+            {
+                EmpresaId = empresa.Id,
+                SucursalId = sucursalId,
+                TrabajadorId = null,
+                Nombre = request.NombreUsuario,
+                Email = request.Email,
+                Password = request.Password,
+                TipoUsuario = "EMPRENDEDOR",
+                Activo = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            await _usuarioService.CreateAsync(usuario);
+
+            return Ok(new
+            {
+                empresa = new
+                {
+                    empresa.Id,
+                    empresa.Nombre,
+                    empresa.Rubro
+                },
+                sucursal = sucursalId != null ? new { Id = sucursalId } : null,
+                usuario = new
+                {
+                    usuario.Id,
+                    usuario.Nombre,
+                    usuario.Email,
+                    usuario.TipoUsuario,
+                    usuario.EmpresaId,
+                    usuario.SucursalId
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { 
+                error = "Error interno del servidor", 
+                mensaje = ex.Message,
+                detalle = ex.InnerException?.Message 
+            });
+        }
     }
 
     [HttpPost("crear-trabajador")]
