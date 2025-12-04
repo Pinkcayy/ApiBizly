@@ -23,10 +23,10 @@ builder.Services.AddSingleton(sp =>
         var settings = sp.GetRequiredService<IOptions<MongoDbSettings>>().Value;
 
         // En producción, verificar variables de entorno primero
-        var connectionString = Environment.GetEnvironmentVariable("MongoDbSettings__ConnectionString") 
+        var connectionString = Environment.GetEnvironmentVariable("MongoDbSettings__ConnectionString")
                                ?? settings?.ConnectionString;
-        
-        var databaseName = Environment.GetEnvironmentVariable("MongoDbSettings__DatabaseName") 
+
+        var databaseName = Environment.GetEnvironmentVariable("MongoDbSettings__DatabaseName")
                            ?? settings?.DatabaseName;
 
         if (string.IsNullOrEmpty(connectionString))
@@ -216,7 +216,7 @@ app.UseExceptionHandler(errorApp =>
         var exception = exceptionHandlerPathFeature?.Error;
 
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-        logger.LogError(exception, "Error no manejado en la aplicación. Path: {Path}, Method: {Method}", 
+        logger.LogError(exception, "Error no manejado en la aplicación. Path: {Path}, Method: {Method}",
             context.Request.Path, context.Request.Method);
 
         var response = new
@@ -242,6 +242,9 @@ try
 
     // GraphQL endpoint
     app.MapGraphQL("/graphql");
+
+    // 🔥 Endpoint de salud para Render / cron-job
+    app.MapGet("/health", () => "API OK");
 }
 catch (System.Reflection.ReflectionTypeLoadException ex)
 {
